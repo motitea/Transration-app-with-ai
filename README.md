@@ -2,8 +2,6 @@
 
 An AI-powered "speaking coach" and translation application designed to help users refine their language skills. Built with a pure Python/Flask + vanilla JavaScript stack, this project goes beyond simple translation by providing detailed feedback on vocabulary, usage frequency, and alternative expressions, acting like a personal language tutor.
 
-![Talkable AI Screenshot](https://raw.githubusercontent.com/your-username/your-repo-name/main/screenshot.png)
-*(Note: You will need to add a screenshot of the application to your repository and update this link.)*
 
 ---
 
