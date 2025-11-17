@@ -376,6 +376,47 @@ button:active {
     margin-left: 15px;
 }
 
+/* 新しいチェックボックスのスタイル */
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background-color: #f8f9fa;
+    padding: 12px;
+    border-radius: var(--border-radius-sm);
+    margin-top: -10px;
+}
+#sarcasm-checkbox {
+    margin: 0;
+    width: 16px;
+    height: 16px;
+}
+.checkbox-group label {
+    margin-bottom: 0;
+    font-weight: 500;
+    user-select: none;
+}
+
+/* 新しい解説カードのスタイル */
+.cultural-explanation-card {
+    background: rgba(255, 248, 225, 0.8); /* Light yellow background */
+    border-left: 4px solid #ffc107;
+}
+.cultural-explanation-card h2 {
+    color: #c79100;
+}
+
+.superficial-translation-card {
+    background: rgba(240, 240, 240, 0.7);
+    border-left: 4px solid #adb5bd;
+}
+.superficial-translation-card .main-translation-text {
+    font-size: 1.1rem;
+    font-weight: 400;
+    font-style: italic;
+}
+
+
 /* フォントの変更 */
 .vocabulary-list .term, .alternative-item strong {
     font-family: inherit; /* 可読性の高い本文フォントを継承 */

@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const pdfPreview = document.getElementById('pdf-preview');
     const pdfFilename = document.getElementById('pdf-filename');
     const removeFileBtn = document.getElementById('remove-file-btn');
+    const sarcasmCheckbox = document.getElementById('sarcasm-checkbox');
 
     // ===== UI更新関数 =====
     function updateUiForDirection(direction) {
@@ -104,11 +105,12 @@ document.addEventListener('DOMContentLoaded', () => {
         let payload = {
             level: levelSelect.value,
             style: styleSelect.value,
-            direction: currentDirection
+            direction: currentDirection,
+            force_sarcasm_check: sarcasmCheckbox.checked
         };
 
         if (fileData) {
-            endpoint = '/api/ocr_translate'; // 共通のエンドポイント
+            endpoint = '/api/ocr_translate';
             payload.file = fileData;
             payload.mime_type = fileMimeType;
         } else {
@@ -161,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function showSkeletonLoader(direction) {
         loadingContainer.style.display = 'block';
         let skeletonHtml = (direction === 'jp-to-en')
-            ? `<div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line text"></div><div class="skeleton-line text short"></div></div><div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line text"></div></div><div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line text"></div></div>`
+            ? `<div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line text"></div></div><div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line text"></div><div class="skeleton-line text short"></div></div><div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line text"></div></div><div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line text"></div></div>`
             : `<div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line text"></div><div class="skeleton-line text short"></div></div><div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line text"></div></div>`;
         loadingContainer.innerHTML = skeletonHtml;
     }
@@ -177,8 +179,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 html += createVocabularyHtml(data.vocabulary);
             }
         } else if (direction === 'jp-to-en' && data.main_translation) {
+            // 文化的な解説があるかチェック
+            if (data.cultural_explanation) {
+                html += `<div class="result-card cultural-explanation-card"><h2>文化的背景の解説</h2><p>${data.cultural_explanation}</p></div>`;
+            }
+
+            // 最適な表現（真の意図）
+            const mainTitle = data.cultural_explanation ? "最適な表現 (真の意図)" : "最適な表現";
+            html += `<div class="result-card"><div class="card-header"><h2>${mainTitle}</h2><button class="copy-btn">コピー</button></div><p class="main-translation-text">${data.main_translation}</p><div class="original-text-display"><strong>元のテキスト:</strong> ${originalText}</div></div>`;
+
+            // 表面的な翻訳があるかチェック
+            if (data.superficial_translation) {
+                html += `<div class="result-card superficial-translation-card"><div class="card-header"><h2>表面的・文字通りの訳</h2></div><p class="main-translation-text">${data.superficial_translation}</p></div>`;
+            }
+            
+            // 語彙と代替案
             data.alternatives.sort((a, b) => b.frequency.length - a.frequency.length);
-            html += `<div class="result-card"><div class="card-header"><h2>最適な表現</h2><button class="copy-btn">コピー</button></div><p class="main-translation-text">${data.main_translation}</p><div class="original-text-display"><strong>元のテキスト:</strong> ${originalText}</div></div>`;
             if (data.vocabulary && data.vocabulary.length > 0) {
                 html += createVocabularyHtml(data.vocabulary);
             }
