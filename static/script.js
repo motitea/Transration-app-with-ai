@@ -121,6 +121,41 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
     }
 
+    /**
+     * ストリーミングされるJSONバッファから、指定されたキーに対応する文字列値を抽出する。
+     * この関数は正規表現を使用せず、indexOfによる文字列検索のみで動作するため、構文エラーに対して非常に堅牢。
+     * @param {string} key - 検索するJSONキー。
+     * @param {string} buffer - 現在のJSONバッファ。
+     * @param {boolean} isFinal - バッファが最終形かどうか。falseの場合、終端の引用符がなくても部分的な文字列を返す。
+     * @returns {string|null} - 抽出された文字列値、または見つからない場合はnull。
+     */
+    function extractValue(key, buffer, isFinal = false) {
+        const keyPattern = `"${key}": "`;
+        const startIndex = buffer.indexOf(keyPattern);
+        if (startIndex === -1) {
+            return null;
+        }
+
+        const valueStartIndex = startIndex + keyPattern.length;
+        let endIndex = valueStartIndex;
+        
+        // 終端の引用符を探す（エスケープされた引用符は無視する）
+        while (true) {
+            endIndex = buffer.indexOf('"', endIndex);
+            if (endIndex === -1) {
+                // 終端の引用符がバッファにまだない
+                return isFinal ? null : buffer.substring(valueStartIndex);
+            }
+            // 直前の文字がバックスラッシュでないことを確認
+            if (buffer[endIndex - 1] !== '\\') {
+                return buffer.substring(valueStartIndex, endIndex);
+            }
+            // エスケープされた引用符だったので、次の文字から検索を続ける
+            endIndex++;
+        }
+    }
+
+
     // ===== ストリーム1: 翻訳を処理してタイピング表示 =====
     async function processTranslationStream(response, direction, originalText) {
         const mainTranslationElem = document.querySelector('#main-translation-card-container .main-translation-text');
@@ -131,22 +166,20 @@ document.addEventListener('DOMContentLoaded', () => {
         let jsonBuffer = '';
         let streamEnded = false;
 
-        // 元のテキストを先に表示
         const originalTextDisplay = document.querySelector('#main-translation-card-container .original-text-display');
         if(originalTextDisplay) {
             originalTextDisplay.innerHTML = `<strong>元のテキスト:</strong> ${originalText}`;
         }
 
-        // レンダリングループを開始
         typingInterval = setInterval(() => {
             if (charQueue.length > 0) {
                 mainTranslationElem.textContent += charQueue.shift();
             } else if (streamEnded) {
                 clearInterval(typingInterval);
                 typingInterval = null;
-                if(caret) caret.style.display = 'none'; // 終了したらキャレットを消す
+                if(caret) caret.style.display = 'none';
             }
-        }, 30); // 30msごとに1文字表示
+        }, 30);
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
@@ -160,22 +193,15 @@ document.addEventListener('DOMContentLoaded', () => {
             
             jsonBuffer += decoder.decode(value, { stream: true });
 
-            // 新しい文字をキューに追加
             const mainKey = direction === 'jp-to-en' ? 'main_translation' : 'translation';
-            // Corrected Regex using new RegExp()
-            const partialMatchRegex = new RegExp(`"${mainKey}":\s*"((?:[^"\\]|\\.)*)"`);
-            const partialMatch = jsonBuffer.match(partialMatchRegex);
+            const currentText = extractValue(mainKey, jsonBuffer, false);
 
-            if (partialMatch && partialMatch[1]) {
-                const currentText = partialMatch[1];
-                if (currentText.length > processedTextLength) {
-                    const newChars = currentText.substring(processedTextLength).split('');
-                    charQueue.push(...newChars);
-                    processedTextLength = currentText.length;
-                }
+            if (currentText !== null && currentText.length > processedTextLength) {
+                const newChars = currentText.substring(processedTextLength).split('');
+                charQueue.push(...newChars);
+                processedTextLength = currentText.length;
             }
             
-            // 他のカードはこれまで通り一括で表示
             parseAndRenderOtherCards(jsonBuffer);
         }
 
@@ -190,29 +216,27 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error("翻訳ストリームの最終解析に失敗:", e);
             renderError("AIからの翻訳応答を解析できませんでした。");
-            streamEnded = true; // エラー時もループを止める
+            streamEnded = true;
         }
     }
 
     // ===== 翻訳以外のカードを一括表示するパーサー =====
     function parseAndRenderOtherCards(jsonBuffer) {
         const culturalContainer = document.getElementById('cultural-explanation-card-container');
-        if (!culturalContainer.innerHTML && jsonBuffer.includes('"cultural_explanation"')) {
-            // Corrected Regex Literal
-            const match = jsonBuffer.match(/"cultural_explanation":\s*"((?:[^"\\]|\\.)*)"/);
-            if (match && match[1]) {
-                culturalContainer.innerHTML = `<div class="result-card cultural-explanation-card"><h2>文化的背景の解説</h2><p>${match[1]}</p></div>`;
+        if (!culturalContainer.innerHTML) {
+            const text = extractValue("cultural_explanation", jsonBuffer, true);
+            if (text) {
+                culturalContainer.innerHTML = `<div class="result-card cultural-explanation-card"><h2>文化的背景の解説</h2><p>${text}</p></div>`;
                 const titleElem = document.getElementById('main-translation-title');
                 if(titleElem) titleElem.textContent = "最適な表現 (真の意図)";
             }
         }
 
         const superficialContainer = document.getElementById('superficial-translation-card-container');
-        if (!superficialContainer.innerHTML && jsonBuffer.includes('"superficial_translation"')) {
-            // Corrected Regex Literal
-            const match = jsonBuffer.match(/"superficial_translation":\s*"((?:[^"\\]|\\.)*)"/);
-            if (match && match[1]) {
-                superficialContainer.innerHTML = `<div class="result-card superficial-translation-card"><div class="card-header"><h2>表面的・文字通りの訳</h2></div><p class="main-translation-text">${match[1]}</p></div>`;
+        if (!superficialContainer.innerHTML) {
+            const text = extractValue("superficial_translation", jsonBuffer, true);
+            if (text) {
+                superficialContainer.innerHTML = `<div class="result-card superficial-translation-card"><div class="card-header"><h2>表面的・文字通りの訳</h2></div><p class="main-translation-text">${text}</p></div>`;
             }
         }
     }
