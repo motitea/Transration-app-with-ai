@@ -144,14 +144,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ===== ストリーム1: 翻訳を処理してタイピング表示 =====
+    // ===== ストリーム1: 翻訳を処理してタイピング表示 (RAW TEXT版) =====
     async function processTranslationStream(response, originalText) {
         const mainTranslationElem = document.querySelector('#main-translation-card-container .main-translation-text');
         const caret = document.querySelector('#main-translation-card-container .typing-caret');
         
         const charQueue = [];
-        let processedTextLength = 0;
-        let jsonBuffer = '';
         let streamEnded = false;
 
         const originalTextDisplay = document.querySelector('#main-translation-card-container .original-text-display');
@@ -166,43 +164,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearInterval(typingInterval);
                 typingInterval = null;
                 if(caret) caret.style.display = 'none';
+
+                // タイピング完了後、最終的なテキストを取得して分析APIを呼び出す
+                const finalTranslatedText = mainTranslationElem.textContent;
+                if (finalTranslatedText) {
+                    lastTranslatedText = finalTranslatedText;
+                    document.getElementById('analysis-container').style.display = 'block';
+                    fetchAndProcessAnalysis(originalText, finalTranslatedText, false); // 初期分析はforceSarcasm=false
+                } else {
+                    // ストリームが空だった場合のエラーハンドリング
+                    renderError("AIから翻訳結果を受信できませんでした。");
+                }
             }
         }, 20);
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
 
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) {
-                streamEnded = true;
-                break;
-            }
-            
-            jsonBuffer += decoder.decode(value, { stream: true });
-
-            const currentText = extractValue("translation", jsonBuffer, false);
-
-            if (currentText !== null && currentText.length > processedTextLength) {
-                const newChars = currentText.substring(processedTextLength).split('');
-                charQueue.push(...newChars);
-                processedTextLength = currentText.length;
-            }
-        }
-
-        const finalJsonString = jsonBuffer.replace(/```json|```/g, '').trim();
         try {
-            const finalData = JSON.parse(finalJsonString);
-            const translatedText = finalData.translation;
-            if (translatedText) {
-                lastTranslatedText = translatedText; // 翻訳結果を保存
-                // 分析APIの呼び出し
-                document.getElementById('analysis-container').style.display = 'block';
-                fetchAndProcessAnalysis(originalText, translatedText, false); // 初期分析はforceSarcasm=false
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) {
+                    break;
+                }
+                const textChunk = decoder.decode(value, { stream: true });
+                charQueue.push(...textChunk.split(''));
             }
-        } catch (e) {
-            console.error("翻訳ストリームの最終解析に失敗:", e);
-            renderError("AIからの翻訳応答を解析できませんでした。");
+        } catch (error) {
+            console.error("翻訳ストリームの読み取り中にエラー:", error);
+            renderError("翻訳結果の受信中にエラーが発生しました。");
+        } finally {
             streamEnded = true;
         }
     }
@@ -269,6 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const caret = document.querySelector('#main-translation-card-container .typing-caret');
                     if(caret) caret.style.display = 'none';
                     mainElem.textContent = newMainTranslation; // Replace with the better translation
+                    lastTranslatedText = newMainTranslation; // 状態を更新
                 }
                 states.main_translation = true;
             }

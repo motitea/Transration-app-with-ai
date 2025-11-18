@@ -33,35 +33,17 @@ model = genai.GenerativeModel('gemini-2.5-flash')
 # --- プロンプト生成ヘルパー関数 ---
 
 def _get_hyperfast_jp_to_en_prompt(text, level, style):
-    """(超高速) 日本語から英語への翻訳のみを行うプロンプト"""
-    return f"""
-# 指示
-以下の日本語のテキストを、指定されたレベルとスタイルで英語に翻訳してください。余計な解説や挨拶は一切含めず、JSON形式の翻訳結果のみを出力してください。
+    """(RAW TEXT) 日本語から英語への翻訳のみを最速で行うプロンプト"""
+    return f"""Translate the following Japanese text to {level} {style} English. Output ONLY the translated text. Do not include any other text, explanations, or formatting.
 
-# 入力情報
-- テキスト: "{text}"
-- 希望レベル: "{level}"
-- 希望スタイル: "{style}"
-
-# 出力フォーマット (JSON)
-{{
-  "translation": "ここに翻訳結果の英語（文字列）"
-}}
+Japanese Text: "{text}"
 """
 
 def _get_hyperfast_en_to_jp_prompt(text):
-    """(超高速) 英語から日本語への翻訳のみを行うプロンプト"""
-    return f"""
-# 指示
-以下の英語のテキストを、自然で正確な日本語に翻訳してください。余計な解説や挨拶は一切含めず、JSON形式の翻訳結果のみを出力してください。
+    """(RAW TEXT) 英語から日本語への翻訳のみを最速で行うプロンプト"""
+    return f"""以下の英語のテキストを、自然で正確な日本語に翻訳してください。翻訳文のみを出力し、他のテキスト、解説、フォーマットは一切含めないでください。
 
-# 入力情報
-- テキスト: "{text}"
-
-# 出力フォーマット (JSON)
-{{
-  "translation": "ここに翻訳結果の日本語（文字列）"
-}}
+English Text: "{text}"
 """
 
 def _get_full_analysis_prompt(original_text, translated_text, direction, level, style, force_sarcasm_check):
