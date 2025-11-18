@@ -144,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 typingInterval = null;
                 if(caret) caret.style.display = 'none';
             }
-        }, 20); // 20msごとに1文字表示で高速化
+        }, 20);
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
@@ -172,8 +172,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const finalData = JSON.parse(finalJsonString);
             const translatedText = finalData.translation;
             if (translatedText) {
-                // 最終的な翻訳結果を確定
-                mainTranslationElem.textContent = translatedText;
                 // 分析APIの呼び出し
                 document.getElementById('analysis-container').style.display = 'block';
                 fetchAndProcessAnalysis(originalText, translatedText);
@@ -209,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const reader = response.body.getReader();
             const decoder = new TextDecoder('utf-8');
             let jsonBuffer = '';
-            let renderedStates = { cultural_explanation: false, superficial_translation: false, vocabulary: false, alternatives: false, renderedAlternatives: [], renderedVocab: [] };
+            let renderedStates = { main_translation: false, cultural_explanation: false, superficial_translation: false, vocabulary: false, alternatives: false, renderedAlternatives: [], renderedVocab: [] };
 
             while (true) {
                 const { value, done } = await reader.read();
@@ -234,6 +232,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ===== パーサー2: 分析ストリームを解析してレンダリング =====
     function parseAndRenderAnalysisStream(jsonBuffer, states) {
+        // main_translation (from analysis)
+        if (!states.main_translation) {
+            const newMainTranslation = extractValue("main_translation", jsonBuffer, true);
+            if (newMainTranslation) {
+                const mainElem = document.querySelector('#main-translation-card-container .main-translation-text');
+                if (mainElem) {
+                    if (typingInterval) {
+                        clearInterval(typingInterval); // Stop the initial typing
+                        typingInterval = null;
+                    }
+                    const caret = document.querySelector('#main-translation-card-container .typing-caret');
+                    if(caret) caret.style.display = 'none';
+                    mainElem.textContent = newMainTranslation; // Replace with the better translation
+                }
+                states.main_translation = true;
+            }
+        }
+
         // cultural_explanation
         if (!states.cultural_explanation) {
             const text = extractValue("cultural_explanation", jsonBuffer, true);

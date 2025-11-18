@@ -85,21 +85,21 @@ def _get_full_analysis_prompt(original_text, translated_text, direction, level, 
 
 # 厳格な実行タスク
 1.  **[皮肉・裏の意味の分析]**: 「原文」を分析し、文字通りの意味か、皮肉や建前が含まれるかを判断します。
-2.  **[追加翻訳の生成]**: 分析結果に基づき、`superficial_translation`（表面的・文字通りの翻訳）が必要な場合のみ生成します。
-3.  **[解説の生成]**: 皮肉や建前がある場合のみ、`cultural_explanation`（なぜその翻訳になったのかの文化的な解説）を100文字程度の日本語で生成します。
-4.  **[語彙・代替案の生成]**: 「一次翻訳」を基に、`vocabulary`（重要語彙）と`alternatives`（代替案）を生成します。
+2.  **[翻訳の再評価]**: ステップ1の分析の結果、もし「一次翻訳」が文字通りの訳に過ぎず、話者の真の意図（皮肉や建前）を反映できていないと判断した場合、真の意図を反映した新しい`main_translation`を生成してください。もし「一次翻訳」が既に適切であるか、修正の必要がない場合は、`main_translation`には`null`を設定してください。
+3.  **[追加翻訳の生成]**: 分析の結果、`superficial_translation`（表面的・文字通りの翻訳）が必要な場合のみ生成します。これは通常、「一次翻訳」とは異なる、意図を汲まない場合の訳です。
+4.  **[解説の生成]**: 皮肉や建前がある場合のみ、`cultural_explanation`（なぜその翻訳になったのかの文化的な解説）を100文字程度の日本語で生成します。
+5.  **[語彙・代替案の生成]**: 「一次翻訳」または新しく生成した「`main_translation`」を基に、`vocabulary`（重要語彙）と`alternatives`（代替案）を生成します。
 
 # 出力フォーマット (JSON)
 {{
+  "main_translation": "再評価の結果、修正が必要な場合の新しい翻訳（文字列）。不要な場合は null",
   "superficial_translation": "皮肉や建前の場合、ここに表面的・文字通りの英訳（文字列）。不要な場合は null",
   "cultural_explanation": "皮肉や建前の場合、ここに文化的な背景の解説（文字列）。不要な場合は null",
   "vocabulary": [
-    {{"term": "語彙1", "short_meaning": "短い意味1", "explanation": "詳細な説明1"}},
-    {{"term": "語彙2", "short_meaning": "短い意味2", "explanation": "詳細な説明2"}}
+    {{"term": "語彙1", "short_meaning": "短い意味1", "explanation": "詳細な説明1"}}
   ],
   "alternatives": [
-    {{"expression": "代替案1", "nuance": "ニュアンス1", "frequency": "★★★"}},
-    {{"expression": "代替案2", "nuance": "ニュアンス2", "frequency": "★★☆"}}
+    {{"expression": "代替案1", "nuance": "ニュアンス1", "frequency": "★★★"}}
   ]
 }}
 """
