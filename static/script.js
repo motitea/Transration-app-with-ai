@@ -204,7 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ===== パーサー1: 翻訳ストリームを解析してレンダリング =====
     function parseAndRenderTranslationStream(jsonBuffer, direction, originalText, states) {
         if (!states.cultural_explanation && jsonBuffer.includes('"cultural_explanation"')) {
-            const match = jsonBuffer.match(/"cultural_explanation":\s*"((?:[^"\\]|\\.)*)"/);
+            const match = jsonBuffer.match(/"cultural_explanation":\s*"((?:[^"\\]|\\\\.)*)"/);
             if (match && match[1]) {
                 document.getElementById('cultural-explanation-card-container').innerHTML = `<div class="result-card cultural-explanation-card"><h2>文化的背景の解説</h2><p>${match[1]}</p></div>`;
                 states.cultural_explanation = true;
@@ -213,7 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const mainKey = direction === 'jp-to-en' ? 'main_translation' : 'translation';
         if (!states[mainKey] && jsonBuffer.includes(`"${mainKey}"`)) {
-            const match = jsonBuffer.match(new RegExp(`"${mainKey}":\s*"((?:[^"\\]|\\.)*)"`));
+            const match = jsonBuffer.match(new RegExp(`"${mainKey}":\\s*"((?:[^"\\\\]|\\\\.)*)"`));
             if (match && match[1]) {
                 const title = states.cultural_explanation ? "最適な表現 (真の意図)" : (direction === 'jp-to-en' ? "最適な表現" : "翻訳結果");
                 document.getElementById('main-translation-card-container').innerHTML = `<div class="result-card"><div class="card-header"><h2>${title}</h2><button class="copy-btn">コピー</button></div><p class="main-translation-text">${match[1]}</p><div class="original-text-display"><strong>元のテキスト:</strong> ${originalText}</div></div>`;
@@ -222,7 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (!states.superficial_translation && jsonBuffer.includes('"superficial_translation"')) {
-            const match = jsonBuffer.match(/"superficial_translation":\s*"((?:[^"\\]|\\.)*)"/);
+            const match = jsonBuffer.match(/"superficial_translation":\s*"((?:[^"\\]|\\\\.)*)"/);
             if (match && match[1]) {
                 document.getElementById('superficial-translation-card-container').innerHTML = `<div class="result-card superficial-translation-card"><div class="card-header"><h2>表面的・文字通りの訳</h2></div><p class="main-translation-text">${match[1]}</p></div>`;
                 states.superficial_translation = true;
