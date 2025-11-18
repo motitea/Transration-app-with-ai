@@ -31,13 +31,13 @@ An AI-powered "speaking coach" and translation application designed to help user
     - A modern language switcher (`日本語 ⇄ 英語`).
     - Dropdowns for "Expression Level" and "Style" (Formal/Casual) for `jp-to-en` coaching.
     - Results are displayed dynamically on the same page without a reload.
+- **Streaming UI for Real-time Results:** Results are streamed from the server and rendered progressively on the page. Users see the main translation, vocabulary, and alternative expressions appear one by one as they are generated, significantly improving perceived performance.
     - A "Copy to Clipboard" button for the main translation.
     - Enter-to-submit functionality in the text area.
-    - Skeleton loaders to improve perceived performance.
 
 ## 5. API Endpoints
-- `POST /api/translate`: Handles text-based translation requests.
-- `POST /api/ocr_translate`: Handles file-based (Image/PDF) translation requests.
+- `POST /api/translate`: Handles text-based translation requests. The response is streamed as plain text for real-time UI updates.
+- `POST /api/ocr_translate`: Handles file-based (Image/PDF) translation requests. The response is also streamed.
 
 ## 6. How to Run the Application
 1.  **Set API Key:** Ensure your `GEMINI_API_KEY` is set in a `.env` file in the root directory.
