@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     });
 
-    // ===== イベントリスナー（翻訳実行） - タイピングエフェクト対応 =====
+    // ===== イベントリスナー（翻訳実行） - 2段階API・タイピングエフェクト対応 =====
     translateBtn.addEventListener('click', async () => {
         const text = textInput.value.trim();
         if (!text) {
@@ -58,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (typingInterval) clearInterval(typingInterval);
         translateBtn.disabled = true;
-        translateBtn.textContent = 'AIが分析中...';
+        translateBtn.textContent = 'AIが翻訳中...';
         setupStreamingUI(currentDirection);
 
         try {
@@ -69,8 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     text: text,
                     level: levelSelect.value,
                     style: styleSelect.value,
-                    direction: currentDirection,
-                    force_sarcasm_check: sarcasmCheckbox.checked
+                    direction: currentDirection
                 }),
             });
 
@@ -80,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             if (response.body) {
-                await processTranslationStream(response, currentDirection, text);
+                await processTranslationStream(response, text);
             } else {
                 throw new Error("レスポンスボディがありません。");
             }
@@ -96,11 +95,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // ===== ストリーミングUIの準備 =====
     function setupStreamingUI(direction) {
-        const analysisTitle = direction === 'jp-to-en' ? '重要語彙・その他の表現' : '重要語彙・表現';
-        const mainTranslationTitle = direction === 'jp-to-en' ? "最適な表現" : "翻訳結果";
+        const mainTranslationTitle = direction === 'jp-to-en' ? "翻訳結果" : "翻訳結果";
 
         resultsContent.innerHTML = `
-            <div id="cultural-explanation-card-container"></div>
             <div id="main-translation-card-container">
                 <div class="result-card">
                     <div class="card-header">
@@ -111,53 +108,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="original-text-display"></div>
                 </div>
             </div>
-            <div id="superficial-translation-card-container"></div>
-            <div id="analysis-container" class="result-card" style="display: none;">
-                <h2>${analysisTitle}</h2>
-                <div id="vocabulary-card-container"></div>
-                <div id="alternatives-card-container"></div>
-                <div class="spinner-container" style="text-align: center; padding: 20px;"><div class="spinner"></div></div>
+            <div id="analysis-container" style="display: none;">
+                <div id="cultural-explanation-card-container"></div>
+                <div id="superficial-translation-card-container"></div>
+                <div class="result-card">
+                    <h2 id="analysis-title">詳細分析</h2>
+                    <div id="vocabulary-card-container"></div>
+                    <div id="alternatives-card-container"></div>
+                    <div class="spinner-container" style="text-align: center; padding: 20px;"><div class="spinner"></div></div>
+                </div>
             </div>
         `;
     }
 
-    /**
-     * ストリーミングされるJSONバッファから、指定されたキーに対応する文字列値を抽出する。
-     * この関数は正規表現を使用せず、indexOfによる文字列検索のみで動作するため、構文エラーに対して非常に堅牢。
-     * @param {string} key - 検索するJSONキー。
-     * @param {string} buffer - 現在のJSONバッファ。
-     * @param {boolean} isFinal - バッファが最終形かどうか。falseの場合、終端の引用符がなくても部分的な文字列を返す。
-     * @returns {string|null} - 抽出された文字列値、または見つからない場合はnull。
-     */
-    function extractValue(key, buffer, isFinal = false) {
-        const keyPattern = `"${key}": "`;
-        const startIndex = buffer.indexOf(keyPattern);
-        if (startIndex === -1) {
-            return null;
-        }
-
-        const valueStartIndex = startIndex + keyPattern.length;
-        let endIndex = valueStartIndex;
-        
-        // 終端の引用符を探す（エスケープされた引用符は無視する）
-        while (true) {
-            endIndex = buffer.indexOf('"', endIndex);
-            if (endIndex === -1) {
-                // 終端の引用符がバッファにまだない
-                return isFinal ? null : buffer.substring(valueStartIndex);
-            }
-            // 直前の文字がバックスラッシュでないことを確認
-            if (buffer[endIndex - 1] !== '\\') {
-                return buffer.substring(valueStartIndex, endIndex);
-            }
-            // エスケープされた引用符だったので、次の文字から検索を続ける
-            endIndex++;
-        }
-    }
-
-
     // ===== ストリーム1: 翻訳を処理してタイピング表示 =====
-    async function processTranslationStream(response, direction, originalText) {
+    async function processTranslationStream(response, originalText) {
         const mainTranslationElem = document.querySelector('#main-translation-card-container .main-translation-text');
         const caret = document.querySelector('#main-translation-card-container .typing-caret');
         
@@ -179,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 typingInterval = null;
                 if(caret) caret.style.display = 'none';
             }
-        }, 30);
+        }, 20); // 20msごとに1文字表示で高速化
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
@@ -193,25 +158,25 @@ document.addEventListener('DOMContentLoaded', () => {
             
             jsonBuffer += decoder.decode(value, { stream: true });
 
-            const mainKey = direction === 'jp-to-en' ? 'main_translation' : 'translation';
-            const currentText = extractValue(mainKey, jsonBuffer, false);
+            const currentText = extractValue("translation", jsonBuffer, false);
 
             if (currentText !== null && currentText.length > processedTextLength) {
                 const newChars = currentText.substring(processedTextLength).split('');
                 charQueue.push(...newChars);
                 processedTextLength = currentText.length;
             }
-            
-            parseAndRenderOtherCards(jsonBuffer);
         }
 
         const finalJsonString = jsonBuffer.replace(/```json|```/g, '').trim();
         try {
             const finalData = JSON.parse(finalJsonString);
-            const translatedText = finalData.main_translation || finalData.translation;
+            const translatedText = finalData.translation;
             if (translatedText) {
+                // 最終的な翻訳結果を確定
+                mainTranslationElem.textContent = translatedText;
+                // 分析APIの呼び出し
                 document.getElementById('analysis-container').style.display = 'block';
-                fetchAndProcessAnalysis(originalText, translatedText, direction);
+                fetchAndProcessAnalysis(originalText, translatedText);
             }
         } catch (e) {
             console.error("翻訳ストリームの最終解析に失敗:", e);
@@ -219,35 +184,21 @@ document.addEventListener('DOMContentLoaded', () => {
             streamEnded = true;
         }
     }
-
-    // ===== 翻訳以外のカードを一括表示するパーサー =====
-    function parseAndRenderOtherCards(jsonBuffer) {
-        const culturalContainer = document.getElementById('cultural-explanation-card-container');
-        if (!culturalContainer.innerHTML) {
-            const text = extractValue("cultural_explanation", jsonBuffer, true);
-            if (text) {
-                culturalContainer.innerHTML = `<div class="result-card cultural-explanation-card"><h2>文化的背景の解説</h2><p>${text}</p></div>`;
-                const titleElem = document.getElementById('main-translation-title');
-                if(titleElem) titleElem.textContent = "最適な表現 (真の意図)";
-            }
-        }
-
-        const superficialContainer = document.getElementById('superficial-translation-card-container');
-        if (!superficialContainer.innerHTML) {
-            const text = extractValue("superficial_translation", jsonBuffer, true);
-            if (text) {
-                superficialContainer.innerHTML = `<div class="result-card superficial-translation-card"><div class="card-header"><h2>表面的・文字通りの訳</h2></div><p class="main-translation-text">${text}</p></div>`;
-            }
-        }
-    }
     
     // ===== ストリーム2: 分析結果をフェッチして処理 =====
-    async function fetchAndProcessAnalysis(originalText, translatedText, direction) {
+    async function fetchAndProcessAnalysis(originalText, translatedText) {
         try {
             const response = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ original_text: originalText, translated_text: translatedText, direction: direction }),
+                body: JSON.stringify({ 
+                    original_text: originalText, 
+                    translated_text: translatedText, 
+                    direction: currentDirection,
+                    level: levelSelect.value,
+                    style: styleSelect.value,
+                    force_sarcasm_check: sarcasmCheckbox.checked
+                }),
             });
 
             if (!response.ok) {
@@ -258,7 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const reader = response.body.getReader();
             const decoder = new TextDecoder('utf-8');
             let jsonBuffer = '';
-            let renderedStates = { vocabulary: false, alternatives: false, renderedAlternatives: [], renderedVocab: [] };
+            let renderedStates = { cultural_explanation: false, superficial_translation: false, vocabulary: false, alternatives: false, renderedAlternatives: [], renderedVocab: [] };
 
             while (true) {
                 const { value, done } = await reader.read();
@@ -276,14 +227,35 @@ document.addEventListener('DOMContentLoaded', () => {
             if(analysisContainer) {
                 const spinner = analysisContainer.querySelector('.spinner-container');
                 if(spinner) spinner.style.display = 'none';
-                analysisContainer.innerHTML += `<p class="error-text" style="padding: 0 20px 20px;">分析データの取得中にエラーが発生しました。</p>`;
+                document.getElementById('analysis-title').textContent = "詳細分析（エラー）";
             }
         }
     }
 
     // ===== パーサー2: 分析ストリームを解析してレンダリング =====
     function parseAndRenderAnalysisStream(jsonBuffer, states) {
-        if (jsonBuffer.includes('"vocabulary"')) {
+        // cultural_explanation
+        if (!states.cultural_explanation) {
+            const text = extractValue("cultural_explanation", jsonBuffer, true);
+            if (text) {
+                document.getElementById('cultural-explanation-card-container').innerHTML = `<div class="result-card cultural-explanation-card"><h2>文化的背景の解説</h2><p>${text}</p></div>`;
+                const titleElem = document.getElementById('main-translation-title');
+                if(titleElem) titleElem.textContent = "最適な表現 (真の意図)";
+                states.cultural_explanation = true;
+            }
+        }
+
+        // superficial_translation
+        if (!states.superficial_translation) {
+            const text = extractValue("superficial_translation", jsonBuffer, true);
+            if (text) {
+                document.getElementById('superficial-translation-card-container').innerHTML = `<div class="result-card superficial-translation-card"><div class="card-header"><h2>表面的・文字通りの訳</h2></div><p class="main-translation-text">${text}</p></div>`;
+                states.superficial_translation = true;
+            }
+        }
+
+        // vocabulary
+        if (jsonBuffer.includes("vocabulary")) {
             if (!states.vocabulary) {
                 document.getElementById('vocabulary-card-container').innerHTML = `<ul class="vocabulary-list" id="vocabulary-list-stream"></ul>`;
                 states.vocabulary = true;
@@ -302,13 +274,14 @@ document.addEventListener('DOMContentLoaded', () => {
                                 list.appendChild(li);
                                 states.renderedVocab.push(item);
                             }
-                        } catch (e) { /* 不完全なオブジェクトは無視 */ }
+                        } catch (e) { /* Ignore incomplete objects */ }
                     });
                 }
             }
         }
 
-        if (jsonBuffer.includes('"alternatives"')) {
+        // alternatives
+        if (jsonBuffer.includes("alternatives")) {
             if (!states.alternatives) {
                 document.getElementById('alternatives-card-container').innerHTML = `<div id="alternatives-list-stream"></div>`;
                 states.alternatives = true;
@@ -328,10 +301,39 @@ document.addEventListener('DOMContentLoaded', () => {
                                 list.appendChild(div);
                                 states.renderedAlternatives.push(item);
                             }
-                        } catch (e) { /* 不完全なオブジェクトは無視 */ }
+                        } catch (e) { /* Ignore incomplete objects */ }
                     });
                 }
             }
+        }
+    }
+
+    /**
+     * ストリーミングされるJSONバッファから、指定されたキーに対応する文字列値を抽出する。
+     * @param {string} key - 検索するJSONキー。
+     * @param {string} buffer - 現在のJSONバッファ。
+     * @param {boolean} isFinal - バッファが最終形かどうか。trueの場合、終端の引用符が見つからないとnullを返す。
+     * @returns {string|null} - 抽出された文字列値、または見つからない場合はnull。
+     */
+    function extractValue(key, buffer, isFinal = false) {
+        const keyPattern = `"${key}": "`;
+        const startIndex = buffer.indexOf(keyPattern);
+        if (startIndex === -1) {
+            return null;
+        }
+
+        const valueStartIndex = startIndex + keyPattern.length;
+        let currentIndex = valueStartIndex;
+        
+        while (true) {
+            const nextQuoteIndex = buffer.indexOf('"', currentIndex);
+            if (nextQuoteIndex === -1) {
+                return isFinal ? null : buffer.substring(valueStartIndex);
+            }
+            if (buffer.charAt(nextQuoteIndex - 1) !== '\\') {
+                return buffer.substring(valueStartIndex, nextQuoteIndex);
+            }
+            currentIndex = nextQuoteIndex + 1;
         }
     }
 

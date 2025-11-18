@@ -32,48 +32,31 @@ model = genai.GenerativeModel('gemini-2.5-flash')
 
 # --- プロンプト生成ヘルパー関数 ---
 
-def _get_fast_jp_to_en_prompt(text, level, style, force_sarcasm_check):
-    """(高速) 日本語から英語への翻訳・解説プロンプトを生成する"""
-    sarcasm_check_status = "有効" if force_sarcasm_check else "無効"
+def _get_hyperfast_jp_to_en_prompt(text, level, style):
+    """(超高速) 日本語から英語への翻訳のみを行うプロンプト"""
     return f"""
-# 役割設定
-あなたは、プロの「スピーキング・コーチ」であり、言語の「文化・文脈通訳者」です。あなたの仕事は、発言の「真の意図」を見抜き、その文化的背景まで含めて翻訳することです。
-
 # 指示
-ユーザーのテキストを分析し、文化的背景（方言、皮肉、建前）を考慮して、最適な翻訳を生成してください。以下のタスクを厳密に実行してください。
+以下の日本語のテキストを、指定されたレベルとスタイルで英語に翻訳してください。余計な解説や挨拶は一切含めず、JSON形式の翻訳結果のみを出力してください。
 
 # 入力情報
-- ユーザーのテキスト: "{text}"
+- テキスト: "{text}"
 - 希望レベル: "{level}"
 - 希望スタイル: "{style}"
-- 皮肉強制分析フラグ: {sarcasm_check_status}
-
-# 厳格な実行タスク
-1.  **[皮肉・裏の意味の分析]**: テキストを分析し、文字通りの意味か、皮肉や建前が含まれるかを判断します。
-2.  **[翻訳の実行]**: 分析結果に基づき、以下の2つの翻訳を生成します。
-    - `main_translation` (最適解): 話者の「真の意図」を汲み取った翻訳。
-    - `superficial_translation` (表面的): 皮肉や建前がある場合のみ、文字通りの翻訳。
-3.  **[解説の生成]**: 皮肉や建前がある場合のみ、`cultural_explanation`（なぜその翻訳になったのかの文化的な解説）を100文字程度の日本語で生成します。
 
 # 出力フォーマット (JSON)
 {{
-  "main_translation": "ここに最適解の英訳（文字列）",
-  "superficial_translation": "皮肉や建前の場合、ここに表面的・文字通りの英訳（文字列）。標準的な発言の場合は null",
-  "cultural_explanation": "皮肉や建前の場合、ここに文化的な背景の解説（文字列）。標準的な発言の場合は null"
+  "translation": "ここに翻訳結果の英語（文字列）"
 }}
 """
 
-def _get_fast_en_to_jp_prompt(text):
-    """(高速) 英語から日本語への翻訳プロンプトを生成する"""
+def _get_hyperfast_en_to_jp_prompt(text):
+    """(超高速) 英語から日本語への翻訳のみを行うプロンプト"""
     return f"""
-# 役割設定
-あなたはプロの翻訳家です。
-
 # 指示
-提供された英語のテキストを、自然で正確な日本語に翻訳してください。
+以下の英語のテキストを、自然で正確な日本語に翻訳してください。余計な解説や挨拶は一切含めず、JSON形式の翻訳結果のみを出力してください。
 
 # 入力情報
-- 元の英語テキスト: "{text}"
+- テキスト: "{text}"
 
 # 出力フォーマット (JSON)
 {{
@@ -81,34 +64,42 @@ def _get_fast_en_to_jp_prompt(text):
 }}
 """
 
-def _get_analysis_prompt(original_text, translated_text, direction):
-    """翻訳結果に基づき、語彙と代替案を生成するプロンプト"""
+def _get_full_analysis_prompt(original_text, translated_text, direction, level, style, force_sarcasm_check):
+    """翻訳結果に基づき、全ての詳細な分析を行うプロンプト"""
+    sarcasm_check_status = "有効" if force_sarcasm_check else "無効"
+    
     if direction == 'jp-to-en':
         return f"""
 # 役割設定
-あなたはプロの「スピーキング・コーチ」です。
+あなたは、プロの「スピーキング・コーチ」であり、言語の「文化・文脈通訳者」です。
 
 # 指示
-以下の「原文」と「その翻訳文」を基に、学習者のための補足情報を生成してください。
+以下の「原文」と、それに対する「一次翻訳」を基に、学習者のための詳細な分析と補足情報を生成してください。
 
 # 入力情報
 - 原文 (日本語): "{original_text}"
-- 翻訳文 (英語): "{translated_text}"
+- 一次翻訳 (英語): "{translated_text}"
+- 希望レベル: "{level}"
+- 希望スタイル: "{style}"
+- 皮肉強制分析フラグ: {sarcasm_check_status}
 
-# 実行タスク
-1. **`vocabulary`**: 「翻訳文」の中から、特に重要だと考える単語やイディオムを2〜3個選び出し、「短い意味」と「詳細な説明」を**日本語で**生成します。
-2. **`alternatives`**: 「翻訳文」以外に考えられる、異なるニュアンスを持つ自然な代替表現を3つ提案し、それぞれの使用頻度を3段階の星（★★★, ★★☆, ★☆☆）で評価します。ニュアンスも**日本語で**記述してください。
+# 厳格な実行タスク
+1.  **[皮肉・裏の意味の分析]**: 「原文」を分析し、文字通りの意味か、皮肉や建前が含まれるかを判断します。
+2.  **[追加翻訳の生成]**: 分析結果に基づき、`superficial_translation`（表面的・文字通りの翻訳）が必要な場合のみ生成します。
+3.  **[解説の生成]**: 皮肉や建前がある場合のみ、`cultural_explanation`（なぜその翻訳になったのかの文化的な解説）を100文字程度の日本語で生成します。
+4.  **[語彙・代替案の生成]**: 「一次翻訳」を基に、`vocabulary`（重要語彙）と`alternatives`（代替案）を生成します。
 
 # 出力フォーマット (JSON)
 {{
+  "superficial_translation": "皮肉や建前の場合、ここに表面的・文字通りの英訳（文字列）。不要な場合は null",
+  "cultural_explanation": "皮肉や建前の場合、ここに文化的な背景の解説（文字列）。不要な場合は null",
   "vocabulary": [
     {{"term": "語彙1", "short_meaning": "短い意味1", "explanation": "詳細な説明1"}},
     {{"term": "語彙2", "short_meaning": "短い意味2", "explanation": "詳細な説明2"}}
   ],
   "alternatives": [
     {{"expression": "代替案1", "nuance": "ニュアンス1", "frequency": "★★★"}},
-    {{"expression": "代替案2", "nuance": "ニュアンス2", "frequency": "★★☆"}},
-    {{"expression": "代替案3", "nuance": "ニュアンス3", "frequency": "★☆☆"}}
+    {{"expression": "代替案2", "nuance": "ニュアンス2", "frequency": "★★☆"}}
   ]
 }}
 """
@@ -153,7 +144,7 @@ def index():
 
 @app.route('/api/translate', methods=['POST'])
 def translate_text():
-    """(高速) テキスト翻訳APIのエンドポイント"""
+    """(超高速) テキスト翻訳APIのエンドポイント"""
     if not api_key:
         return Response('{"error": "Gemini API key is not configured on the server."}', status=500, content_type='application/json')
 
@@ -165,9 +156,9 @@ def translate_text():
     
     try:
         if direction == 'jp-to-en':
-            prompt = _get_fast_jp_to_en_prompt(data['text'], data.get('level', '英検2級'), data.get('style', 'カジュアル'), data.get('force_sarcasm_check', False))
+            prompt = _get_hyperfast_jp_to_en_prompt(data['text'], data.get('level', '英検2級'), data.get('style', 'カジュアル'))
         elif direction == 'en-to-jp':
-            prompt = _get_fast_en_to_jp_prompt(data['text'])
+            prompt = _get_hyperfast_en_to_jp_prompt(data['text'])
         else:
             return Response('{"error": "Invalid direction specified."}', status=400, content_type='application/json')
         
@@ -178,23 +169,10 @@ def translate_text():
         print(f"Error during streaming translation: {e}")
         return Response(f'{{"error": "An error occurred during translation: {str(e)}"}}', status=500, content_type='application/json')
 
-@app.route('/api/ocr_translate', methods=['POST'])
-def ocr_translate():
-    """(高速) 画像/PDF(OCR)翻訳APIのエンドポイント"""
-    # このエンドポイントはコンセプトが複雑になるため、一旦シンプルなテキストベースの翻訳のみを高速化の対象とする
-    # そのため、この関数は元の（分割前）の完全なプロンプトを呼び出すように維持する
-    # TODO: OCRのフローも高速・低速の2段階に分割するか検討
-    if not api_key:
-        return Response('{"error": "Gemini API key is not configured on the server."}', status=500, content_type='application/json')
-
-    # (元のロジックを維持)
-    # ... (元のコードをここに記述) ...
-    return Response('{"error": "OCR translation is not supported in this version."}', status=501, content_type='application/json')
-
 
 @app.route('/api/analyze', methods=['POST'])
 def analyze_text():
-    """(低速) 翻訳結果の分析APIのエンドポイント"""
+    """(低速) 翻訳結果の完全な分析APIのエンドポイント"""
     if not api_key:
         return Response('{"error": "Gemini API key is not configured on the server."}', status=500, content_type='application/json')
 
@@ -203,7 +181,14 @@ def analyze_text():
         return Response('{"error": "Invalid input parameters for analysis."}', status=400, content_type='application/json')
 
     try:
-        prompt = _get_analysis_prompt(data['original_text'], data['translated_text'], data['direction'])
+        prompt = _get_full_analysis_prompt(
+            data['original_text'], 
+            data['translated_text'], 
+            data['direction'],
+            data.get('level', '英検2級'), 
+            data.get('style', 'カジュアル'),
+            data.get('force_sarcasm_check', False)
+        )
         if not prompt:
             return Response('{"error": "Invalid direction for analysis."}', status=400, content_type='application/json')
 
