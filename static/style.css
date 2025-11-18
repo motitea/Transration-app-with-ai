@@ -296,6 +296,7 @@ button:active {
     font-size: 1.6rem;
     font-weight: 600;
     color: var(--text-color);
+    min-height: 1.2em; /* ちらつき防止 */
 }
 
 .original-text-display {
@@ -462,4 +463,41 @@ button:active {
     100% {
         background-position: 300px 0;
     }
+}
+
+/* ===== タイピングエフェクト用のキャレット ===== */
+.typing-caret {
+    display: inline-block;
+    width: 2px;
+    height: 1.5rem;
+    background-color: var(--text-color);
+    animation: blink 1s step-end infinite;
+    margin-left: 4px;
+    vertical-align: bottom;
+}
+
+@keyframes blink {
+    from, to { background-color: transparent; }
+    50% { background-color: var(--text-color); }
+}
+
+/* ===== スピナー ===== */
+.spinner-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid var(--primary-color);
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
