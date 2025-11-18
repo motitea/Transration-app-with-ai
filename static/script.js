@@ -4,6 +4,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // ===== 状態管理 =====
     let currentDirection = 'jp-to-en';
     let typingInterval = null; // タイピングエフェクトのインターバルID
+    let lastOriginalText = ''; // 最後に翻訳した原文
+    let lastTranslatedText = ''; // 最後に翻訳した結果
 
     // ===== DOM要素の取得 =====
     const inputForm = document.getElementById('input-form');
@@ -13,7 +15,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const translateBtn = document.getElementById('translate-btn');
     const resultsContent = document.getElementById('results-content');
     const swapLangBtn = document.getElementById('swap-lang-btn');
-    const sarcasmCheckbox = document.getElementById('sarcasm-checkbox');
 
     // ===== UI更新関数 =====
     function updateUiForDirection(direction) {
@@ -55,6 +56,8 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('翻訳したいテキストを入力してください。');
             return;
         }
+
+        lastOriginalText = text; // 原文を保存
 
         if (typingInterval) clearInterval(typingInterval);
         translateBtn.disabled = true;
@@ -113,12 +116,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div id="superficial-translation-card-container"></div>
                 <div class="result-card">
                     <h2 id="analysis-title">詳細分析</h2>
+                    <div id="analysis-controls" style="margin-bottom: 15px;">
+                        <button id="understand-inner-meaning-btn" class="btn btn-secondary">内的意味を理解する</button>
+                    </div>
                     <div id="vocabulary-card-container"></div>
                     <div id="alternatives-card-container"></div>
                     <div class="spinner-container" style="text-align: center; padding: 20px;"><div class="spinner"></div></div>
                 </div>
             </div>
         `;
+        // 新しいボタンのイベントリスナーを設定
+        document.getElementById('understand-inner-meaning-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('understand-inner-meaning-btn');
+            btn.disabled = true;
+            btn.textContent = '分析中...';
+            // 既存の分析結果をクリア
+            document.getElementById('cultural-explanation-card-container').innerHTML = '';
+            document.getElementById('superficial-translation-card-container').innerHTML = '';
+            document.getElementById('vocabulary-card-container').innerHTML = '';
+            document.getElementById('alternatives-card-container').innerHTML = '';
+            const spinner = document.querySelector('#analysis-container .spinner-container');
+            if(spinner) spinner.style.display = 'block';
+
+            await fetchAndProcessAnalysis(lastOriginalText, lastTranslatedText, true); // forceSarcasmをtrueで呼び出し
+            btn.disabled = false;
+            btn.textContent = '内的意味を理解する';
+        });
     }
 
     // ===== ストリーム1: 翻訳を処理してタイピング表示 =====
@@ -172,9 +195,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const finalData = JSON.parse(finalJsonString);
             const translatedText = finalData.translation;
             if (translatedText) {
+                lastTranslatedText = translatedText; // 翻訳結果を保存
                 // 分析APIの呼び出し
                 document.getElementById('analysis-container').style.display = 'block';
-                fetchAndProcessAnalysis(originalText, translatedText);
+                fetchAndProcessAnalysis(originalText, translatedText, false); // 初期分析はforceSarcasm=false
             }
         } catch (e) {
             console.error("翻訳ストリームの最終解析に失敗:", e);
@@ -184,7 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // ===== ストリーム2: 分析結果をフェッチして処理 =====
-    async function fetchAndProcessAnalysis(originalText, translatedText) {
+    async function fetchAndProcessAnalysis(originalText, translatedText, forceSarcasm = false) {
         try {
             const response = await fetch('/api/analyze', {
                 method: 'POST',
@@ -195,7 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     direction: currentDirection,
                     level: levelSelect.value,
                     style: styleSelect.value,
-                    force_sarcasm_check: sarcasmCheckbox.checked
+                    force_sarcasm_check: forceSarcasm // forceSarcasmを渡す
                 }),
             });
 
