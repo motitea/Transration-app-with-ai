@@ -120,9 +120,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function setupStreamingUI(direction) {
         loadingContainer.style.display = 'none';
         const analysisTitle = direction === 'jp-to-en' ? '重要語彙・その他の表現' : '重要語彙・表現';
+        const mainTranslationTitle = direction === 'jp-to-en' ? "最適な表現" : "翻訳結果";
+
         resultsContent.innerHTML = `
             <div id="cultural-explanation-card-container"></div>
-            <div id="main-translation-card-container"></div>
+            <div id="main-translation-card-container">
+                <div class="result-card">
+                    <div class="card-header">
+                        <h2 id="main-translation-title">${mainTranslationTitle}</h2>
+                        <button class="copy-btn">コピー</button>
+                    </div>
+                    <p class="main-translation-text"></p>
+                    <div class="original-text-display"></div>
+                </div>
+            </div>
             <div id="superficial-translation-card-container"></div>
             <div id="analysis-container" class="result-card" style="display: none;">
                 <h2>${analysisTitle}</h2>
@@ -138,13 +149,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let jsonBuffer = '';
-        let renderedStates = { cultural_explanation: false, main_translation: false, translation: false, superficial_translation: false };
+        let renderedStates = { 
+            cultural_explanation: false, 
+            main_translation_populated: false, // テキストの逐次表示用フラグ
+            superficial_translation: false 
+        };
+
+        // 元のテキストを先に表示
+        const originalTextDisplay = document.querySelector('#main-translation-card-container .original-text-display');
+        if(originalTextDisplay) {
+            originalTextDisplay.innerHTML = `<strong>元のテキスト:</strong> ${originalText}`;
+        }
 
         while (true) {
             const { value, done } = await reader.read();
             if (done) break;
             jsonBuffer += decoder.decode(value, { stream: true });
-            parseAndRenderTranslationStream(jsonBuffer, direction, originalText, renderedStates);
+            parseAndRenderTranslationStream(jsonBuffer, direction, renderedStates);
         }
 
         const finalJsonString = jsonBuffer.replace(/```json|```/g, '').trim();
@@ -152,6 +173,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const finalData = JSON.parse(finalJsonString);
             const translatedText = finalData.main_translation || finalData.translation;
             if (translatedText) {
+                // 最終テキストを反映
+                const mainTranslationElem = document.querySelector('#main-translation-card-container .main-translation-text');
+                if(mainTranslationElem) mainTranslationElem.textContent = translatedText;
+
                 document.getElementById('analysis-container').style.display = 'block';
                 fetchAndProcessAnalysis(originalText, translatedText, direction);
             }
@@ -202,22 +227,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ===== パーサー1: 翻訳ストリームを解析してレンダリング =====
-    function parseAndRenderTranslationStream(jsonBuffer, direction, originalText, states) {
+    function parseAndRenderTranslationStream(jsonBuffer, direction, states) {
+        // --- 逐次表示 ---
+        const mainKey = direction === 'jp-to-en' ? 'main_translation' : 'translation';
+        const mainTranslationElem = document.querySelector('#main-translation-card-container .main-translation-text');
+        
+        if (mainTranslationElem) {
+            const partialMatchRegex = new RegExp(`"${mainKey}":\\s*"((?:[^"\\\\]|\\\\.)*)`);
+            const partialMatch = jsonBuffer.match(partialMatchRegex);
+            if (partialMatch && partialMatch[1]) {
+                // テキストをリアルタイムで更新
+                mainTranslationElem.textContent = partialMatch[1];
+                states.main_translation_populated = true;
+            }
+        }
+
+        // --- カード単位のレンダリング ---
         if (!states.cultural_explanation && jsonBuffer.includes('"cultural_explanation"')) {
             const match = jsonBuffer.match(/"cultural_explanation":\s*"((?:[^"\\]|\\\\.)*)"/);
             if (match && match[1]) {
                 document.getElementById('cultural-explanation-card-container').innerHTML = `<div class="result-card cultural-explanation-card"><h2>文化的背景の解説</h2><p>${match[1]}</p></div>`;
+                // タイトルを更新
+                const titleElem = document.getElementById('main-translation-title');
+                if(titleElem) titleElem.textContent = "最適な表現 (真の意図)";
                 states.cultural_explanation = true;
-            }
-        }
-
-        const mainKey = direction === 'jp-to-en' ? 'main_translation' : 'translation';
-        if (!states[mainKey] && jsonBuffer.includes(`"${mainKey}"`)) {
-            const match = jsonBuffer.match(new RegExp(`"${mainKey}":\\s*"((?:[^"\\\\]|\\\\.)*)"`));
-            if (match && match[1]) {
-                const title = states.cultural_explanation ? "最適な表現 (真の意図)" : (direction === 'jp-to-en' ? "最適な表現" : "翻訳結果");
-                document.getElementById('main-translation-card-container').innerHTML = `<div class="result-card"><div class="card-header"><h2>${title}</h2><button class="copy-btn">コピー</button></div><p class="main-translation-text">${match[1]}</p><div class="original-text-display"><strong>元のテキスト:</strong> ${originalText}</div></div>`;
-                states[mainKey] = true;
             }
         }
 
