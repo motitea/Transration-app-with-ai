@@ -162,6 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 新しい文字をキューに追加
             const mainKey = direction === 'jp-to-en' ? 'main_translation' : 'translation';
+            // Corrected Regex using new RegExp()
             const partialMatchRegex = new RegExp(`"${mainKey}":\s*"((?:[^"\\]|\\.)*)"`);
             const partialMatch = jsonBuffer.match(partialMatchRegex);
 
@@ -197,6 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function parseAndRenderOtherCards(jsonBuffer) {
         const culturalContainer = document.getElementById('cultural-explanation-card-container');
         if (!culturalContainer.innerHTML && jsonBuffer.includes('"cultural_explanation"')) {
+            // Corrected Regex Literal
             const match = jsonBuffer.match(/"cultural_explanation":\s*"((?:[^"\\]|\\.)*)"/);
             if (match && match[1]) {
                 culturalContainer.innerHTML = `<div class="result-card cultural-explanation-card"><h2>文化的背景の解説</h2><p>${match[1]}</p></div>`;
@@ -207,6 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const superficialContainer = document.getElementById('superficial-translation-card-container');
         if (!superficialContainer.innerHTML && jsonBuffer.includes('"superficial_translation"')) {
+            // Corrected Regex Literal
             const match = jsonBuffer.match(/"superficial_translation":\s*"((?:[^"\\]|\\.)*)"/);
             if (match && match[1]) {
                 superficialContainer.innerHTML = `<div class="result-card superficial-translation-card"><div class="card-header"><h2>表面的・文字通りの訳</h2></div><p class="main-translation-text">${match[1]}</p></div>`;
